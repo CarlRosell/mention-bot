@@ -9,7 +9,7 @@ Do you have a GitHub project that is too big for people to subscribe to all the 
 - Go to
  - your project on GitHub > Settings > Webhooks & services > Add Webhook or
  - your organization on GitHub > Settings > Webhooks > Add Webhook
-- Payload URL: `https://mention-bot.herokuapp.com/`
+- Payload URL: (https://mention-bot.herokuapp.com/)
 - Let me select individual events > Check `Pull Request`
 - Add Webhook
 
@@ -23,6 +23,8 @@ The bot can be configured by adding a `.mention-bot` file to the base directory 
 {
   "maxReviewers": 5, // Maximum  number of people to ping in the PR message, default is 3
   "numFilesToCheck": 10, // Number of files to check against, default is 5
+  "message": "@pullRequester, thanks! @reviewers, please review this.",
+             // custom message using @pullRequester and @reviewers
   "alwaysNotifyForPaths": [
     {
       "name": "ghuser", // The user's Github username
@@ -183,4 +185,4 @@ mentionBot
 
 ## License
 
-mention-bot is BSD-licensed. We also provide an additional patent grant.
+mention-bot is [BSD-licensed](https://github.com/facebook/mention-bot/blob/master/LICENSE). We also provide an [additional patent grant](https://github.com/facebook/mention-bot/blob/master/PATENTS).
