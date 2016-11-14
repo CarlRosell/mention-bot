@@ -645,6 +645,9 @@ async function guessOwnersForPullRequest(
   var files = parseDiff(diff);
   var defaultOwners = await getMatchingOwners(files, config.alwaysNotifyForPaths, creator, org, github);
   var fallbackOwners = await getMatchingOwners(files, config.fallbackNotifyForPaths, creator, org, github);
+
+  console.log('Config', JSON.stringify(config));
+
   if (!config.findPotentialReviewers) {
       return defaultOwners;
   }
