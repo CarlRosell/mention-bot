@@ -300,6 +300,7 @@ async function getMatchingOwners(
     user.files.forEach(function(pattern) {
       if (!userHasChangedFile) {
         userHasChangedFile = files.find(function(file) {
+          console.log(file.path, pattern, minimatch(file.path, pattern));
           return minimatch(file.path, pattern);
         });
       }
