@@ -328,7 +328,7 @@ async function filterOwnTeam(
   })) {
     return owners;
   }
-  
+
   // GitHub does not provide an API to look up a team by name.
   // Instead, get all teams, then filter against those matching
   // our teams list who want to be excluded from their own PR's.
@@ -594,24 +594,36 @@ async function guessOwners(
       return config.userBlacklist.indexOf(owner) === -1;
     });
 
+    console.log('1: ', owners);
+
   if (config.requiredOrgs.length > 0) {
     owners = await filterRequiredOrgs(owners, config, github);
   }
+
+  console.log('2: ', owners);
 
   if (privateRepo && org != null) {
     owners = await filterPrivateRepo(owners, org, github);
   }
 
+  console.log('3: ', owners);
+
   if (owners.length === 0) {
     defaultOwners = defaultOwners.concat(fallbackOwners);
   }
 
-  return owners
+  console.log('4: ', owners);
+
+  owners = owners
     .slice(0, config.maxReviewers)
     .concat(defaultOwners)
     .filter(function(owner, index, ownersFound) {
       return ownersFound.indexOf(owner) === index;
     });
+
+  console.log('5: ', owners);
+
+  return owners;
 }
 
 async function guessOwnersForPullRequest(
