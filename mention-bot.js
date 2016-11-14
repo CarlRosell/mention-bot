@@ -300,7 +300,6 @@ async function getMatchingOwners(
     user.files.forEach(function(pattern) {
       if (!userHasChangedFile) {
         userHasChangedFile = files.find(function(file) {
-          console.log(file.path, pattern, minimatch(file.path, pattern));
           return minimatch(file.path, pattern);
         });
       }
@@ -595,36 +594,24 @@ async function guessOwners(
       return config.userBlacklist.indexOf(owner) === -1;
     });
 
-    console.log('1: ', owners);
-
   if (config.requiredOrgs.length > 0) {
     owners = await filterRequiredOrgs(owners, config, github);
   }
-
-  console.log('2: ', owners);
 
   if (privateRepo && org != null) {
     owners = await filterPrivateRepo(owners, org, github);
   }
 
-  console.log('3: ', owners);
-
   if (owners.length === 0) {
     defaultOwners = defaultOwners.concat(fallbackOwners);
   }
 
-  console.log('4: ', owners);
-
-  owners = owners
+  return owners
     .slice(0, config.maxReviewers)
     .concat(defaultOwners)
     .filter(function(owner, index, ownersFound) {
       return ownersFound.indexOf(owner) === index;
     });
-
-  console.log('5: ', owners);
-
-  return owners;
 }
 
 async function guessOwnersForPullRequest(
@@ -646,9 +633,6 @@ async function guessOwnersForPullRequest(
   var files = parseDiff(diff);
   var defaultOwners = await getMatchingOwners(files, config.alwaysNotifyForPaths, creator, org, github);
   var fallbackOwners = await getMatchingOwners(files, config.fallbackNotifyForPaths, creator, org, github);
-
-  console.log('Config', JSON.stringify(config), fallbackOwners);
-
   if (!config.findPotentialReviewers) {
       return defaultOwners;
   }
