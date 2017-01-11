@@ -19,6 +19,7 @@ var util = require('util');
 var schedule = require('./schedule.js');
 
 var GitHubApi = require('github');
+var jsonlint = require('jsonlint');
 
 var CONFIG_PATH = '.mention-bot';
 
@@ -98,11 +99,15 @@ function getRepoConfig(request) {
     github.repos.getContent(request, function(err, result) {
       if (err) {
         reject(err);
+        return;
       }
       try {
         var data = JSON.parse(result.data);
         resolve(data);
       } catch (e) {
+        try {
+          e.repoConfig = result.data;
+        } catch (e) {}
         reject(e);
       }
     });
@@ -134,11 +139,12 @@ async function work(body) {
     delayed: false,
     delayedUntil: '3d',
     assignToReviewer: false,
+    createReviewRequest: false,
     skipTitle: '',
     withLabel: '',
     skipCollaboratorPR: false,
   };
-  
+
   if (process.env.MENTION_BOT_CONFIG) {
     try {
       repoConfig = {
@@ -157,14 +163,33 @@ async function work(body) {
   try {
     // request config from repo
     var configRes = await getRepoConfig({
-      user: data.repository.owner.login,
+      owner: data.repository.owner.login,
       repo: data.repository.name,
+      ref: data.pull_request.base.ref,
       path: CONFIG_PATH,
       headers: {
         Accept: 'application/vnd.github.v3.raw+json'
       }
+    }).catch(function(e) {
+      if (e instanceof SyntaxError && repoConfig.actions.indexOf(data.action) !== -1) {
+        // Syntax error while reading custom configuration file
+        var errorLog = '';
+        try {
+          jsonlint.parse(e.repoConfig)
+        } catch(err) {
+          errorLog = err;
+        }
+        var message =
+          'Unable to parse mention-bot custom configuration file due to a syntax error.\n' +
+          'Please check the potential root causes below:\n\n' +
+          '1. Having comments\n' +
+          '2. Invalid JSON type\n' +
+          '3. Having extra "," in the last JSON attribute\n\n' +
+          'Error message:\n' +
+          '```\n' + errorLog + '\n```';
+        createComment(data, message);
+      }
     });
-
     repoConfig = {...repoConfig, ...configRes};
   } catch (e) {
     if (e.code === 404 &&
@@ -197,10 +222,10 @@ async function work(body) {
     }
 
     if (repoConfig.skipCollaboratorPR) {
-      github.repos.getCollaborator({
-        user: data.repository.owner.login, // 'fbsamples'
+      github.repos.checkCollaborator({
+        owner: data.repository.owner.login, // 'fbsamples'
         repo: data.repository.name, // 'bot-testing'
-        collabuser: data.pull_request.user.login
+        username: data.pull_request.user.login
       }, function(err, res){
         if (res && res.meta.status === '204 No Content') {
           console.log('Skipping because pull request is made by collaborator.');
@@ -282,7 +307,7 @@ async function work(body) {
 
   function createComment(data, message, reject) {
     github.issues.createComment({
-      user: data.repository.owner.login, // 'fbsamples'
+      owner: data.repository.owner.login, // 'fbsamples'
       repo: data.repository.name, // 'bot-testing'
       number: data.pull_request.number, // 23
       body: message
@@ -301,7 +326,7 @@ async function work(body) {
     }
 
     github.issues.edit({
-      user: data.repository.owner.login, // 'fbsamples'
+      owner: data.repository.owner.login, // 'fbsamples'
       repo: data.repository.name, // 'bot-testing'
       number: data.pull_request.number, // 23
       assignees: reviewers
@@ -314,10 +339,29 @@ async function work(body) {
     });
   }
 
+  function requestReview(data, reviewers, reject) {
+    if (!repoConfig.createReviewRequest) {
+      return;
+    }
+
+    github.pullRequests.createReviewRequest({
+      owner: data.repository.owner.login, // 'fbsamples'
+      repo: data.repository.name, // 'bot-testing'
+      number: data.pull_request.number, // 23
+      reviewers: reviewers
+    }, function(err) {
+      if (err) {
+        if (typeof reject === 'function') {
+          return reject(err);
+        }
+      }
+    });
+  }
+
   function getComments(data, page) {
     return new Promise(function(resolve, reject) {
       github.issues.getComments({
-        user: data.repository.owner.login, // 'fbsamples'
+        owner: data.repository.owner.login, // 'fbsamples'
         repo: data.repository.name, // 'bot-testing'
         number: data.pull_request.number, // 23
         page: page, // 1
@@ -349,7 +393,7 @@ async function work(body) {
   if (repoConfig.delayed) {
     schedule.performAt(schedule.parse(repoConfig.delayedUntil), function(resolve, reject) {
       github.pullRequests.get({
-        user: data.repository.owner.login,
+        owner: data.repository.owner.login,
         repo: data.repository.name,
         number: data.pull_request.number
       }, function(err, currentData) {
@@ -364,11 +408,13 @@ async function work(body) {
 
         createComment(currentData, message, reject);
         assignReviewer(currentData, reviewers, reject);
+        requestReview(currentData, reviewers, reject);
       });
     });
   } else {
     createComment(data, message);
     assignReviewer(data, reviewers);
+    requestReview(data, reviewers);
   }
 
   return;
@@ -379,6 +425,7 @@ app.post('/', function(req, res) {
     work(body)
       .then(function() { res.end(); })
       .catch(function(e) {
+        console.error(e);
         console.error(e.stack);
         res.status(500).send('Internal Server Error');
       });
